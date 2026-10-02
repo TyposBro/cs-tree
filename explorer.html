@@ -1,0 +1,96 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CS layer tree</title>
+<style>
+  :root {
+    --bg: #0a0d16; --panel: #12172a; --card: #2b3050; --card2: #232845;
+    --line: #4a4f86; --ink: #e8eaf6; --dim: #8f95b5; --accent: #8b8bf5;
+    --passed: #4ade80; --open: #fbbf24; --parked: #c084fc; --locked: #4b5563;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; color: var(--ink); background-color: var(--bg);
+    background-image: radial-gradient(circle at 1px 1px, #1a2033 1px, transparent 0);
+    background-size: 22px 22px;
+    font: 15px/1.45 ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  }
+  header { padding: 20px 22px 6px; display: flex; flex-wrap: wrap; gap: 14px; align-items: baseline; }
+  h1 { font-size: 17px; margin: 0; letter-spacing: .01em; }
+  #summary { color: var(--dim); font-size: 13px; }
+  #summary b { color: var(--ink); }
+  #summary .o { color: var(--open); }
+  nav { padding: 4px 22px 0; display: flex; flex-wrap: wrap; align-items: center; gap: 2px; }
+  .crumb { background: none; border: 0; color: var(--accent); font: inherit; cursor: pointer; padding: 4px 7px; border-radius: 7px; }
+  .crumb:hover { background: #1a2033; }
+  .sep { color: var(--locked); }
+  main { padding: 26px 22px 10px; display: flex; flex-direction: column; align-items: center; gap: 30px; }
+  .children { display: flex; flex-wrap: wrap; gap: 18px; justify-content: center; position: relative; padding-top: 26px; }
+  .children::before { content: ""; position: absolute; top: 0; left: 12%; right: 12%; height: 1px; background: var(--line); }
+  .children > .node::after { content: ""; position: absolute; top: -26px; left: 50%; width: 1px; height: 26px; background: var(--line); }
+  .node {
+    position: relative; display: block; text-align: left; font: inherit; color: var(--ink);
+    background: linear-gradient(180deg, var(--card), var(--card2));
+    border: 1px solid var(--line); border-radius: 13px; padding: 12px 15px 11px;
+    min-width: 200px; max-width: 240px; cursor: pointer;
+  }
+  .node.current { cursor: default; min-width: 320px; max-width: 420px; border-color: var(--accent); }
+  .node:hover:not(.current) { border-color: var(--accent); transform: translateY(-1px); }
+  .ctop { display: flex; justify-content: space-between; gap: 8px; align-items: center; }
+  .id { font-size: 11px; letter-spacing: .08em; color: var(--dim); text-transform: uppercase; }
+  .mark { font-size: 12px; }
+  .name { margin-top: 3px; font-weight: 600; }
+  .bar { height: 4px; border-radius: 3px; background: #0d1120; margin: 10px 0 7px; overflow: hidden; }
+  .bar > i { display: block; height: 100%; border-radius: 3px; background: var(--locked); }
+  .meta { font-size: 11.5px; color: var(--dim); }
+  .node.passed .mark, .node.passed .bar > i { color: var(--passed); }
+  .node.passed .bar > i { background: var(--passed); }
+  .node.open { border-color: var(--open); }
+  .node.open .mark { color: var(--open); }
+  .node.open .bar > i { background: var(--open); }
+  .node.parked .mark { color: var(--parked); }
+  .node.parked .bar > i { background: var(--parked); }
+  .node.layer .mark, .node.layer .bar > i { color: var(--accent); }
+  .node.layer .bar > i { background: var(--accent); }
+  #legend { display: flex; flex-wrap: wrap; gap: 14px; justify-content: center; padding: 0 22px 8px; font-size: 12px; color: var(--dim); }
+  #legend i { font-style: normal; }
+  #legend .passed { color: var(--passed); }
+  #legend .open { color: var(--open); }
+  #legend .parked { color: var(--parked); }
+  #legend .locked { color: var(--locked); }
+  #detail { max-width: 760px; margin: 0 auto 30px; padding: 16px 18px; border: 1px solid #232845; border-radius: 13px; background: var(--panel); }
+  .row { display: flex; gap: 12px; padding: 5px 0; border-bottom: 1px dashed #1d2338; }
+  .row:last-child { border-bottom: 0; }
+  .k { flex: 0 0 58px; color: var(--dim); font-size: 12px; text-transform: uppercase; letter-spacing: .07em; padding-top: 2px; }
+  .v { flex: 1; }
+  footer { text-align: center; color: var(--dim); font-size: 12px; padding: 0 22px 34px; }
+  kbd { background: #1a2033; border: 1px solid #2b3050; border-radius: 5px; padding: 1px 5px; font: inherit; font-size: 11px; }
+  @media (max-width: 720px) {
+    .children { flex-direction: column; align-items: stretch; padding-top: 0; }
+    .children::before, .children > .node::after { display: none; }
+    .node, .node.current { min-width: 0; max-width: 100%; }
+  }
+</style>
+</head>
+<body>
+<header>
+  <h1>CS layer tree</h1>
+  <div id="summary"></div>
+</header>
+<nav id="crumbs"></nav>
+<main id="stage"></main>
+<div id="legend">
+  <i class="passed">&#10003; passed</i>
+  <i class="open">&#9654; open</i>
+  <i class="parked">&#8214; parked</i>
+  <i class="locked">&#9675; locked</i>
+</div>
+<section id="detail"></section>
+<footer>Click a card to go one level deeper. Depth is unlimited. <kbd>Backspace</kbd> goes back up.</footer>
+<script src="tree-data.js"></script>
+<script src="progress.js"></script>
+<script src="explorer.js"></script>
+</body>
+</html>

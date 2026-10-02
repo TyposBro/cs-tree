@@ -1,0 +1,203 @@
+#!/usr/bin/env python3
+"""cs-tree: view and move the CS layer tree. A map, not a menu.
+
+  ./cs-tree              dashboard: progress per layer, the open node, the parked ones
+  ./cs-tree open         open the clickable explorer page in the browser
+  ./cs-tree tree         the frontier only: passed, open, parked. Locked stays hidden.
+  ./cs-tree tree --all   every node, locked dimmed
+  ./cs-tree next         the one node to work now, with its probe and source
+  ./cs-tree show L0.4    one node in full
+  ./cs-tree pass L0.4    mark it passed; opens the next frontier node automatically
+  ./cs-tree open L0.4    mark it open (closes nothing else)
+  ./cs-tree park L0.4    write it down as deliberately-not-now
+  ./cs-tree lock L0.4    back to locked
+"""
+
+import json
+import os
+import subprocess
+import sys
+from pathlib import Path
+
+HERE = Path(__file__).resolve().parent
+TREE = HERE / "tree.json"
+RENDER = HERE / "render.py"
+
+USE_COLOR = sys.stdout.isatty() and os.environ.get("NO_COLOR") is None
+CODES = {"passed": "32", "open": "33;1", "parked": "35", "locked": "2",
+         "reset": "0", "bold": "1", "dim": "2", "cyan": "36"}
+MARK = {"passed": "[x]", "open": "[>]", "parked": "[~]", "locked": "[ ]"}
+
+
+def c(text, code):
+    if not USE_COLOR:
+        return text
+    return "\033[" + CODES[code] + "m" + text + "\033[" + CODES["reset"] + "m"
+
+
+def load():
+    return json.loads(TREE.read_text(encoding="utf-8"))
+
+
+def save(data):
+    TREE.write_text(json.dumps(data, indent=2) + "\n", encoding="utf-8")
+    subprocess.run([sys.executable, str(RENDER)], check=True)
+
+
+def all_nodes(data):
+    return [n for layer in data["layers"] for n in layer["nodes"]]
+
+
+def find(data, nid):
+    for n in all_nodes(data):
+        if n["id"] == nid:
+            return n
+    return None
+
+
+def bar(done, total, width=14):
+    filled = 0 if total == 0 else round(width * done / total)
+    return "#" * filled + "." * (width - filled)
+
+
+def frontier(data):
+    """First locked node after the active run inside each layer."""
+    out = []
+    for layer in data["layers"]:
+        seen = False
+        for n in layer["nodes"]:
+            if n["status"] != "locked":
+                seen = True
+            elif seen:
+                out.append(n)
+                break
+    return out
+
+
+def dashboard(data):
+    nodes = all_nodes(data)
+    passed = sum(1 for n in nodes if n["status"] == "passed")
+    print(c("CS layer tree", "bold") + c("   %d of %d passed" % (passed, len(nodes)), "dim"))
+    print()
+    for layer in data["layers"]:
+        ns = layer["nodes"]
+        p = sum(1 for n in ns if n["status"] == "passed")
+        acting = any(n["status"] != "locked" for n in ns)
+        label = "%-3s %-32s" % (layer["id"], layer["name"])
+        colour = "passed" if p else ("open" if acting else "locked")
+        print("%s %s %2d/%2d" % (c(label, "cyan"), c(bar(p, len(ns)), colour), p, len(ns)))
+    print()
+    op = [n for n in nodes if n["status"] == "open"]
+    pk = [n for n in nodes if n["status"] == "parked"]
+    print(c("Open", "bold"))
+    if op:
+        for n in op:
+            print("  %s %s %s" % (MARK["open"], c(n["id"], "open"), n["name"]))
+            print("      probe:  " + n["probe"])
+            print("      source: " + n["source"])
+    else:
+        fr = frontier(data)
+        print(c("  none.", "dim") + ("  Next on the frontier: %s %s" % (fr[0]["id"], fr[0]["name"]) if fr else ""))
+    if pk:
+        print()
+        print(c("Parked", "bold"))
+        for n in pk:
+            print("  %s %s %s" % (MARK["parked"], c(n["id"], "parked"), n["name"]))
+    print()
+    print(c("  ./cs-tree next   ./cs-tree tree --all", "dim"))
+
+
+def cmd_tree(data, show_all):
+    for layer in data["layers"]:
+        print()
+        print(c(layer["name"] + "  (" + layer["id"] + ")", "bold"))
+        hidden = 0
+        for n in layer["nodes"]:
+            if n["status"] == "locked" and not show_all:
+                hidden += 1
+                continue
+            depth = len(n["id"].split(".")) - 1
+            pad = "  " * depth
+            print("  %s%s %s %s" % (pad, MARK[n["status"]], c(n["id"], "cyan"), c(n["name"], n["status"])))
+        if hidden:
+            print("  " + c("... %d locked, hidden on purpose (--all to see)" % hidden, "dim"))
+
+
+def cmd_next(data):
+    op = [n for n in all_nodes(data) if n["status"] == "open"]
+    if op:
+        for n in op:
+            print(c("OPEN  " + n["id"] + "  " + n["name"], "open"))
+            print("probe:  " + n["probe"])
+            print("source: " + n["source"])
+        return
+    fr = frontier(data)
+    if not fr:
+        print("nothing open, frontier empty.")
+        return
+    n = fr[0]
+    print("nothing open. first on the frontier:")
+    print(c(n["id"] + "  " + n["name"], "cyan"))
+    print("probe:  " + n["probe"])
+    print("source: " + n["source"])
+
+
+def cmd_show(data, nid):
+    n = find(data, nid.upper())
+    if not n:
+        print("no node " + nid)
+        return 1
+    print(c(n["id"] + "  " + n["name"], "bold"))
+    print("status: " + n["status"])
+    print("probe:  " + n["probe"])
+    print("source: " + n["source"])
+    return 0
+
+
+def cmd_set(data, nid, status):
+    n = find(data, nid.upper())
+    if not n:
+        print("no node " + nid)
+        return 1
+    old = n["status"]
+    n["status"] = status
+    opened = ""
+    if status == "passed" and not any(x["status"] == "open" for x in all_nodes(data)):
+        fr = frontier(data)
+        if fr:
+            fr[0]["status"] = "open"
+            opened = "  next open: " + fr[0]["id"] + " " + fr[0]["name"]
+    save(data)
+    print("%s %s: %s -> %s%s" % (n["id"], n["name"], old, status, opened))
+    return 0
+
+
+def main(argv):
+    if not TREE.exists():
+        print("no tree.json next to this script")
+        return 1
+    data = load()
+    if not argv:
+        dashboard(data)
+        return 0
+    cmd = argv[0]
+    if cmd == "tree":
+        cmd_tree(data, "--all" in argv[1:])
+        return 0
+    if cmd == "next":
+        cmd_next(data)
+        return 0
+    if cmd == "show" and len(argv) > 1:
+        return cmd_show(data, argv[1])
+    if cmd in ("pass", "open", "park", "lock") and len(argv) > 1:
+        return cmd_set(data, argv[1], {"pass": "passed", "open": "open", "park": "parked", "lock": "locked"}[cmd])
+    if cmd == "open":
+        page = str(HERE / "explorer.html")
+        subprocess.run(["open" if sys.platform == "darwin" else "xdg-open", page])
+        return 0
+    print(__doc__)
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv[1:]))
