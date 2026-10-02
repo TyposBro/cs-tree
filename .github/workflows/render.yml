@@ -1,0 +1,35 @@
+name: render
+
+# tree.json is the source of truth. Whenever it changes, regenerate the views
+# and commit them, so the Pages site and the markdown never go stale.
+
+on:
+  push:
+    paths:
+      - tree.json
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  render:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.x"
+      - name: Regenerate tree.md and tree-data.js
+        run: python3 render.py
+      - name: Commit if anything changed
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add tree.md tree-data.js
+          if git diff --staged --quiet; then
+            echo "views already current"
+          else
+            git commit -m "render: regenerate views [skip ci]"
+            git push
+          fi

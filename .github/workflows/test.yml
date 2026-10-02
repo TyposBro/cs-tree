@@ -1,0 +1,12 @@
+name: test
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  progress-math:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: node test/progress.test.cjs

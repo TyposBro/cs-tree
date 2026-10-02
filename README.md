@@ -2,6 +2,8 @@
 
 A drill-down map of the layers of computer science, from machine code up to the big codebases.
 
+Live page: https://typosbro.github.io/cs-tree/
+
 Click any card and it becomes the root. Its children fan out below it. The breadcrumb walks back up. Depth is unlimited on purpose: the tree grows where you actually are.
 
 ![The explorer](docs/explorer.png)
