@@ -79,6 +79,14 @@ The point of the rule is that the number never lies about how much is left, and 
 
 Fork it, replace `tree.json` with your own layers and probes, run `python3 render.py`, and open the page. The renderer needs nothing beyond Python 3.
 
+## Knowledge is fractal
+
+A tree is the data structure. Fractal is the property: every node renders the same shape as the whole thing, one node, its children, and a number. Zoom anywhere and the layout repeats. The page is a fractal viewer pointed at a tree.
+
+This is not a coincidence of design. Knowledge really is self-similar. Every topic contains sub-topics, and those have their own prerequisites, tools, and traps, at every scale you care to look. You cannot bottom out. The coastline never stops being detailed.
+
+So completeness is the wrong target. Resolution is the right one. You own a layer when the probe passes at the depth your question needs, not when the topic is exhausted. The probe on each node is the stopping rule.
+
 ## Why it is built this way
 
 A big graph of everything at once is a menu, and menus are where learning dies. This shows you one node and its children, so you only ever see the next step and the shape immediately around it.
